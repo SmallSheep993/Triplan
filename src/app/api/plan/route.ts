@@ -26,14 +26,14 @@ export async function POST(request: Request) {
     };
 
     const placeCandidates = await fetchPlaceCandidates(tripRequest);
-    const plans = generateMultiStylePlans(tripRequest, placeCandidates);
+    const plans = await generateMultiStylePlans(tripRequest, placeCandidates);
 
     return NextResponse.json({
       tripRequest,
       generatedAt: new Date().toISOString(),
       plans,
       nextStep:
-        "Connect Google Places + Yelp in src/lib/providers.ts, and OpenAI structured JSON generation in src/lib/planner.ts.",
+        "Enhance Gemini prompts and persist itineraries to Supabase.",
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

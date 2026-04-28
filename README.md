@@ -22,8 +22,8 @@ Open `http://localhost:3000`
 
 - `src/app/page.tsx`: MVP page
 - `src/app/api/plan/route.ts`: itinerary generation endpoint
-- `src/lib/providers.ts`: external provider wrapper (connect Google/Yelp later)
-- `src/lib/planner.ts`: itinerary planning logic (connect OpenAI later)
+- `src/lib/providers.ts`: Google Places candidate provider
+- `src/lib/planner.ts`: Gemini-based itinerary planning logic (with fallback)
 - `src/lib/types.ts`: core types
 
 ## 4. Next steps for real APIs (recommended order)
@@ -32,20 +32,16 @@ Open `http://localhost:3000`
 
 Replace `src/lib/providers.ts` with real Places queries and return normalized `PlaceCandidate[]`.
 
-### Step 2: Yelp enrichment
+### Step 2: Gemini structured generation
 
-Enhance food candidates with Yelp data for better ranking and tagging.
-
-### Step 3: OpenAI structured generation
-
-Introduce a two-stage generation flow in `src/lib/planner.ts`:
+Use Gemini JSON output in `src/lib/planner.ts`:
 
 1. Generate day-level structure first (theme, budget)
 2. Fill concrete slots (morning/lunch/afternoon/dinner)
 
 Enforce strict JSON schema output.
 
-### Step 4: Supabase persistence
+### Step 3: Supabase persistence
 
 After successful generation, write to:
 
@@ -58,9 +54,8 @@ After successful generation, write to:
 
 Copy `.env.example` to `.env.local` and fill in:
 
-- `OPENAI_API_KEY`
+- `GEMINI_API_KEY`
 - `GOOGLE_MAPS_API_KEY`
-- `YELP_API_KEY`
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
