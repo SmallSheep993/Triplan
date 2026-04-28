@@ -1,76 +1,87 @@
-# Triplan MVP
+# Triplan
 
-A runnable MVP for an AI travel assistant. Enter destination, trip length, budget, and interests to generate 3 itinerary styles.
+Triplan is an AI travel planner that generates personalized itineraries in multiple styles based on destination, trip length, budget, interests, and travel pace.
 
-## 1. Run locally
+## Tech Stack
+
+- Next.js (App Router) + TypeScript
+- Google Places API (destination suggestions + place candidates)
+- Gemini API (structured itinerary generation)
+- Zod (runtime schema validation)
+- Supabase (schema prepared for persistence)
+
+## Current Features
+
+- Destination disambiguation with suggestion selection (prevents ambiguous place names)
+- Empty-first form input (users manually enter values)
+- Editable numeric fields for days and budget (can be fully cleared and retyped)
+- Three itinerary styles per request: `explorer`, `comfort`, `foodie`
+- Daily plans split into `morning`, `lunch`, `afternoon`, `dinner`
+- Responsive UI with quick-start guidance and example input panel
+- Rule-based fallback if Gemini generation fails
+
+## API Flow
+
+1. User searches and confirms a destination from suggestions.
+2. Backend calls Google Places API to fetch attraction and restaurant candidates.
+3. Backend sends trip request + candidates to Gemini for JSON itinerary generation.
+4. Backend validates the model output with Zod and returns plans to the UI.
+5. If Gemini fails, the backend falls back to rule-based generation.
+
+## API Endpoints
+
+- `GET /api/destination-suggestions?q=...`
+  - Returns destination suggestions from Google Places.
+- `POST /api/plan`
+  - Generates three itinerary styles from user preferences.
+
+## Project Structure
+
+- `src/app/page.tsx` - main planner UI
+- `src/app/api/destination-suggestions/route.ts` - destination suggestion API
+- `src/app/api/plan/route.ts` - itinerary generation API
+- `src/lib/providers.ts` - Google Places provider logic
+- `src/lib/planner.ts` - Gemini planner + fallback logic
+- `src/lib/types.ts` - shared types
+- `supabase/schema.sql` - database schema draft
+
+## Run Locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`
+Open `http://localhost:3000`.
 
-## 2. Implemented features
-
-- Frontend input form (destination/days/budget/interests/pace)
-- Backend endpoint `POST /api/plan`
-- Three itinerary styles: `explorer` / `comfort` / `foodie`
-- Supabase SQL schema draft: `supabase/schema.sql`
-
-## 3. Project structure
-
-- `src/app/page.tsx`: MVP page
-- `src/app/api/plan/route.ts`: itinerary generation endpoint
-- `src/lib/providers.ts`: Google Places candidate provider
-- `src/lib/planner.ts`: Gemini-based itinerary planning logic (with fallback)
-- `src/lib/types.ts`: core types
-
-## 4. Next steps for real APIs (recommended order)
-
-### Step 1: Google Places
-
-Replace `src/lib/providers.ts` with real Places queries and return normalized `PlaceCandidate[]`.
-
-### Step 2: Gemini structured generation
-
-Use Gemini JSON output in `src/lib/planner.ts`:
-
-1. Generate day-level structure first (theme, budget)
-2. Fill concrete slots (morning/lunch/afternoon/dinner)
-
-Enforce strict JSON schema output.
-
-### Step 3: Supabase persistence
-
-After successful generation, write to:
-
-1. `trips`
-2. `itinerary_versions`
-3. `itinerary_days`
-4. `itinerary_items`
-
-## 5. Environment variables
+## Environment Variables
 
 Copy `.env.example` to `.env.local` and fill in:
 
 - `GEMINI_API_KEY`
 - `GOOGLE_MAPS_API_KEY`
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_URL` (optional for current MVP runtime)
+- `SUPABASE_ANON_KEY` (optional for current MVP runtime)
+- `SUPABASE_SERVICE_ROLE_KEY` (optional for current MVP runtime)
 
-## 6. Test the endpoint
+## Quick API Test
 
 ```bash
 curl -X POST http://localhost:3000/api/plan \
   -H "Content-Type: application/json" \
   -d '{
-    "destination":"Kyoto",
-    "days":3,
-    "budget":500,
-    "interests":["food","temple"],
+    "destination":"Tokyo, Japan",
+    "days":4,
+    "budget":1200,
+    "interests":["food","culture","city walk"],
     "pace":"balanced"
   }'
 ```
+
+## Next Improvements
+
+- Persist generated trips to Supabase
+- Add regenerate-one-day and replace-place interactions
+- Add budget balancing and place diversity constraints
+- Improve Gemini prompt and retry strategy for rate-limit handling
 
