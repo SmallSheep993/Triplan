@@ -1,13 +1,19 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import type { ItineraryItem, ItineraryPlan, PlanStyle, TripRequest } from "@/lib/types";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import type {
+  DestinationSuggestion,
+  ItineraryItem,
+  ItineraryPlan,
+  PlanStyle,
+  TripRequest,
+} from "@/lib/types";
 
 const DEFAULT_REQUEST: TripRequest = {
-  destination: "Tokyo",
-  days: 4,
-  budget: 600,
-  interests: ["food", "city walk"],
+  destination: "",
+  days: 1,
+  budget: 100,
+  interests: [],
   pace: "balanced",
 };
 
@@ -30,13 +36,88 @@ const SLOT_LABEL: Record<ItineraryItem["slot"], string> = {
 
 export default function HomePage() {
   const [request, setRequest] = useState<TripRequest>(DEFAULT_REQUEST);
+  const [daysInput, setDaysInput] = useState("");
+  const [budgetInput, setBudgetInput] = useState("");
   const [plans, setPlans] = useState<ItineraryPlan[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [activeStyle, setActiveStyle] = useState<PlanStyle>("explorer");
+  const [destinationInput, setDestinationInput] = useState(DEFAULT_REQUEST.destination);
+  const [destinationSuggestions, setDestinationSuggestions] = useState<
+    DestinationSuggestion[]
+  >([]);
+  const [selectedDestination, setSelectedDestination] =
+    useState<DestinationSuggestion | null>(null);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const trimmed = destinationInput.trim();
+    if (trimmed.length < 2 || selectedDestination?.label === trimmed) {
+      setDestinationSuggestions([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setIsLoadingSuggestions(true);
+      try {
+        const response = await fetch(
+          `/api/destination-suggestions?q=${encodeURIComponent(trimmed)}`,
+          { signal: controller.signal },
+        );
+        const data = (await response.json()) as {
+          suggestions?: DestinationSuggestion[];
+        };
+        setDestinationSuggestions(data.suggestions ?? []);
+      } catch {
+        setDestinationSuggestions([]);
+      } finally {
+        setIsLoadingSuggestions(false);
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [destinationInput, selectedDestination?.label]);
+
+  function handleDestinationSelect(suggestion: DestinationSuggestion) {
+    setSelectedDestination(suggestion);
+    setDestinationInput(suggestion.label);
+    setRequest((prev) => ({
+      ...prev,
+      destination: suggestion.secondaryText,
+    }));
+    setDestinationSuggestions([]);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!selectedDestination) {
+      setError("Please choose a destination from suggestions to avoid ambiguity.");
+      inputRef.current?.focus();
+      return;
+    }
+
+    const parsedDays = Number(daysInput);
+    const parsedBudget = Number(budgetInput);
+    if (!Number.isInteger(parsedDays) || parsedDays < 1 || parsedDays > 14) {
+      setError("Trip length must be an integer between 1 and 14.");
+      return;
+    }
+    if (!Number.isFinite(parsedBudget) || parsedBudget < 100) {
+      setError("Total budget must be at least 100 USD.");
+      return;
+    }
+
+    const payload: TripRequest = {
+      ...request,
+      days: parsedDays,
+      budget: parsedBudget,
+    };
+
     setLoading(true);
     setError("");
 
@@ -44,7 +125,7 @@ export default function HomePage() {
       const response = await fetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
+        body: JSON.stringify(payload),
       });
 
       const data = (await response.json()) as PlanApiResponse & { message?: string };
@@ -77,78 +158,161 @@ export default function HomePage() {
           <p>Fill in your travel details and generate tailored plans.</p>
         </div>
 
-        <form className="planner-form" onSubmit={handleSubmit}>
-          <label className="field">
-            <span>Destination</span>
-            <input
-              placeholder="e.g. Tokyo, Kyoto, Paris"
-              value={request.destination}
-              onChange={(e) => setRequest({ ...request, destination: e.target.value })}
-            />
-          </label>
+        <div className="planner-layout">
+          <form className="planner-form" onSubmit={handleSubmit}>
+            <label className="field">
+              <span>Destination</span>
+              <div className="destination-picker">
+                <input
+                  ref={inputRef}
+                  placeholder="Search city, region, or country"
+                  value={destinationInput}
+                  onChange={(e) => {
+                    setDestinationInput(e.target.value);
+                    setSelectedDestination(null);
+                    setRequest((prev) => ({
+                      ...prev,
+                      destination: e.target.value,
+                    }));
+                  }}
+                />
+                {isLoadingSuggestions ? (
+                  <p className="destination-hint">Searching destinations...</p>
+                ) : null}
+                {!selectedDestination ? (
+                  <p className="destination-hint">
+                    Choose a suggestion to confirm the exact location.
+                  </p>
+                ) : (
+                  <p className="destination-confirmed">
+                    Selected destination: <strong>{selectedDestination.secondaryText}</strong>
+                  </p>
+                )}
+                {destinationSuggestions.length > 0 ? (
+                  <ul className="destination-suggestions">
+                    {destinationSuggestions.map((suggestion) => (
+                      <li key={suggestion.placeId}>
+                        <button
+                          type="button"
+                          onClick={() => handleDestinationSelect(suggestion)}
+                        >
+                          <span>{suggestion.label}</span>
+                          <small>{suggestion.secondaryText}</small>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+              <small className="field-help">
+                Start typing and select one suggested location to avoid duplicate place names.
+              </small>
+            </label>
 
-          <label className="field">
-            <span>Trip Length (days)</span>
-            <input
-              type="number"
-              min={1}
-              max={14}
-              value={request.days}
-              onChange={(e) =>
-                setRequest({ ...request, days: Number.parseInt(e.target.value, 10) || 1 })
-              }
-            />
-          </label>
+            <label className="field">
+              <span>Trip Length (days)</span>
+              <input
+                type="number"
+                min={1}
+                max={14}
+                value={daysInput}
+                onChange={(e) => {
+                  setDaysInput(e.target.value);
+                }}
+              />
+              <small className="field-help">Recommended: 3-7 days for balanced plans.</small>
+            </label>
 
-          <label className="field">
-            <span>Total Budget (USD)</span>
-            <input
-              type="number"
-              min={100}
-              value={request.budget}
-              onChange={(e) =>
-                setRequest({ ...request, budget: Number.parseInt(e.target.value, 10) || 100 })
-              }
-            />
-          </label>
+            <label className="field">
+              <span>Total Budget (USD)</span>
+              <input
+                type="number"
+                min={100}
+                value={budgetInput}
+                onChange={(e) => {
+                  setBudgetInput(e.target.value);
+                }}
+              />
+              <small className="field-help">
+                Enter the total trip budget for all days combined.
+              </small>
+            </label>
 
-          <label className="field">
-            <span>Interests</span>
-            <input
-              placeholder="e.g. food, museums, city walk, nature"
-              value={request.interests.join(", ")}
-              onChange={(e) =>
-                setRequest({
-                  ...request,
-                  interests: e.target.value
-                    .split(",")
-                    .map((v) => v.trim())
-                    .filter(Boolean),
-                })
-              }
-            />
-          </label>
+            <label className="field">
+              <span>Interests</span>
+              <input
+                placeholder="e.g. food, museums, city walk, nature"
+                value={request.interests.join(", ")}
+                onChange={(e) =>
+                  setRequest({
+                    ...request,
+                    interests: e.target.value
+                      .split(",")
+                      .map((v) => v.trim())
+                      .filter(Boolean),
+                  })
+                }
+              />
+              <small className="field-help">
+                Use comma-separated interests to personalize recommendations.
+              </small>
+            </label>
 
-          <label className="field field-full">
-            <span>Pace</span>
-            <select
-              value={request.pace}
-              onChange={(e) =>
-                setRequest({ ...request, pace: e.target.value as TripRequest["pace"] })
-              }
-            >
-              <option value="relaxed">Relaxed</option>
-              <option value="balanced">Balanced</option>
-              <option value="packed">Packed</option>
-            </select>
-          </label>
+            <label className="field field-full">
+              <span>Pace</span>
+              <select
+                value={request.pace}
+                onChange={(e) =>
+                  setRequest({ ...request, pace: e.target.value as TripRequest["pace"] })
+                }
+              >
+                <option value="relaxed">Relaxed</option>
+                <option value="balanced">Balanced</option>
+                <option value="packed">Packed</option>
+              </select>
+              <small className="field-help">
+                Relaxed means fewer stops; packed fits more activities per day.
+              </small>
+            </label>
 
-          <div className="actions field-full">
-            <button className="primary-btn" type="submit" disabled={loading}>
-              {loading ? "Generating itineraries..." : "Generate Itineraries"}
-            </button>
-          </div>
-        </form>
+            <div className="actions field-full">
+              <button className="primary-btn" type="submit" disabled={loading}>
+                {loading ? "Generating itineraries..." : "Generate Itineraries"}
+              </button>
+            </div>
+          </form>
+
+          <aside className="planner-tips">
+            <div className="tips-card">
+              <h3>Quick Start</h3>
+              <ol>
+                <li>Search destination and select one suggestion.</li>
+                <li>Set your trip length and total budget.</li>
+                <li>Add interests to personalize your plan.</li>
+                <li>Generate and compare three itinerary styles.</li>
+              </ol>
+            </div>
+
+            <div className="tips-card">
+              <h3>Example Input</h3>
+              <p>
+                <strong>Destination:</strong> Tokyo, Japan
+              </p>
+              <p>
+                <strong>Days:</strong> 4
+              </p>
+              <p>
+                <strong>Budget:</strong> 1200 USD
+              </p>
+              <p>
+                <strong>Interests:</strong> food, culture, city walk
+              </p>
+              <p>
+                <strong>Pace:</strong> Balanced
+              </p>
+            </div>
+          </aside>
+        </div>
 
         {error ? <p className="error-text">Error: {error}</p> : null}
       </section>

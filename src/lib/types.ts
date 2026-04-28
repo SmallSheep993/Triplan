@@ -9,6 +9,12 @@ export interface TripRequest {
   pace: TravelPace;
 }
 
+export interface DestinationSuggestion {
+  placeId: string;
+  label: string;
+  secondaryText: string;
+}
+
 export interface PlaceCandidate {
   id: string;
   name: string;
