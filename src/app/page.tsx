@@ -173,7 +173,7 @@ export default function HomePage() {
 
         <div className="planner-layout">
           <form className="planner-form" onSubmit={handleSubmit}>
-            <label className="field">
+            <label className="field field-area-destination">
               <span>Destination</span>
               <div className="destination-picker">
                 <input
@@ -222,7 +222,7 @@ export default function HomePage() {
               </small>
             </label>
 
-            <label className="field">
+            <label className="field field-area-trip">
               <span>Trip Length (days)</span>
               <input
                 type="number"
@@ -236,7 +236,7 @@ export default function HomePage() {
               <small className="field-help">Recommended: 3-7 days for balanced plans.</small>
             </label>
 
-            <label className="field">
+            <label className="field field-area-budget">
               <span>Total Budget (USD)</span>
               <input
                 type="number"
@@ -251,7 +251,7 @@ export default function HomePage() {
               </small>
             </label>
 
-            <label className="field">
+            <label className="field field-area-interests">
               <span>Interests (optional)</span>
               <input
                 placeholder="e.g. food, museums, city walk, nature"
@@ -263,7 +263,7 @@ export default function HomePage() {
               </small>
             </label>
 
-            <label className="field field-full">
+            <label className="field field-area-pace">
               <span>Pace</span>
               <select
                 value={request.pace}
@@ -280,7 +280,7 @@ export default function HomePage() {
               </small>
             </label>
 
-            <div className="actions field-full">
+            <div className="actions field-area-actions">
               <button className="primary-btn" type="submit" disabled={loading}>
                 {loading ? "Generating itineraries..." : "Generate Itineraries"}
               </button>

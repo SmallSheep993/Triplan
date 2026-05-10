@@ -137,6 +137,37 @@ body {
   display: grid;
   gap: 18px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: row;
+  align-items: start;
+  grid-template-areas:
+    "destination trip"
+    "budget interests"
+    "pace pace"
+    "actions actions";
+}
+
+.planner-form .field-area-destination {
+  grid-area: destination;
+}
+
+.planner-form .field-area-trip {
+  grid-area: trip;
+}
+
+.planner-form .field-area-budget {
+  grid-area: budget;
+}
+
+.planner-form .field-area-interests {
+  grid-area: interests;
+}
+
+.planner-form .field-area-pace {
+  grid-area: pace;
+}
+
+.planner-form .field-area-actions {
+  grid-area: actions;
 }
 
 .field {
@@ -588,7 +619,17 @@ select:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .planner-form,
+  .planner-form {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "destination"
+      "trip"
+      "budget"
+      "interests"
+      "pace"
+      "actions";
+  }
+
   .tab-row {
     grid-template-columns: 1fr;
   }
