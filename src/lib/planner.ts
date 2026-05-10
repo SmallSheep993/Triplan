@@ -50,14 +50,20 @@ const geminiPlansSchema = z.object({
   plans: z.array(itineraryPlanSchema).length(3),
 });
 
+function slotCategory(slot: ItineraryItem["slot"]): PlaceCandidate["category"] {
+  return slot === "lunch" || slot === "dinner" ? "restaurant" : "attraction";
+}
+
 function pickPlace(
   places: PlaceCandidate[],
   slot: ItineraryItem["slot"],
   index: number,
+  styleOffset: number,
 ): PlaceCandidate {
-  const category = slot === "lunch" || slot === "dinner" ? "restaurant" : "attraction";
+  const category = slotCategory(slot);
   const filtered = places.filter((p) => p.category === category);
-  return filtered[index % Math.max(filtered.length, 1)] ?? places[0];
+  const n = Math.max(filtered.length, 1);
+  return filtered[(index + styleOffset) % n] ?? places[0];
 }
 
 function buildDay(
@@ -65,9 +71,10 @@ function buildDay(
   style: PlanStyle,
   req: TripRequest,
   places: PlaceCandidate[],
+  styleOffset: number,
 ): ItineraryDay {
   const items = slots.map((slot, idx) => {
-    const place = pickPlace(places, slot, day + idx);
+    const place = pickPlace(places, slot, day + idx, styleOffset);
     const baseCost = slot === "morning" || slot === "afternoon" ? 20 : 35;
     return {
       slot,
@@ -92,9 +99,10 @@ function generateRuleBasedPlans(
 ): ItineraryPlan[] {
   const styles: PlanStyle[] = ["explorer", "comfort", "foodie"];
 
-  return styles.map((style) => {
+  return styles.map((style, styleIndex) => {
+    const styleOffset = styleIndex * 4;
     const days = Array.from({ length: req.days }, (_, i) =>
-      buildDay(i + 1, style, req, places),
+      buildDay(i + 1, style, req, places, styleOffset),
     );
     const total = days.reduce((sum, d) => sum + d.dailyBudget, 0);
 
@@ -107,6 +115,56 @@ function generateRuleBasedPlans(
   });
 }
 
+function recomputePlanBudgets(plan: ItineraryPlan): ItineraryPlan {
+  const days = plan.days.map((day) => {
+    const dailyBudget = day.items.reduce((sum, i) => sum + i.estimatedCost, 0);
+    return { ...day, dailyBudget };
+  });
+  const totalEstimatedBudget = days.reduce((sum, d) => sum + d.dailyBudget, 0);
+  return { ...plan, days, totalEstimatedBudget };
+}
+
+/** Fixes hallucinated IDs and duplicate venues within a single plan using the candidate pool. */
+function sanitizePlanPlaces(plan: ItineraryPlan, candidates: PlaceCandidate[]): ItineraryPlan {
+  const byId = new Map(candidates.map((p) => [p.id, p]));
+  const used = new Set<string>();
+
+  function poolForSlot(slot: ItineraryItem["slot"]) {
+    const cat = slotCategory(slot);
+    return candidates.filter((p) => p.category === cat);
+  }
+
+  const newDays = plan.days.map((day) => ({
+    ...day,
+    items: day.items.map((item) => {
+      const known = byId.get(item.placeId);
+      if (known && !used.has(item.placeId)) {
+        used.add(item.placeId);
+        return item;
+      }
+
+      const next = poolForSlot(item.slot).find((p) => !used.has(p.id));
+      if (!next) {
+        if (known) used.add(item.placeId);
+        return item;
+      }
+      used.add(next.id);
+      const reason =
+        !known
+          ? "must use only IDs from the candidate list"
+          : "avoid repeating the same venue within this itinerary";
+      return {
+        ...item,
+        placeId: next.id,
+        placeName: next.name,
+        notes: `${STYLE_LABEL[plan.style]} — ${next.name}: ${next.reason ?? reason}`,
+      };
+    }),
+  }));
+
+  return recomputePlanBudgets({ ...plan, days: newDays });
+}
+
 function buildGeminiPrompt(req: TripRequest, places: PlaceCandidate[]): string {
   const simplifiedPlaces = places.slice(0, 36).map((place) => ({
     id: place.id,
@@ -117,13 +175,34 @@ function buildGeminiPrompt(req: TripRequest, places: PlaceCandidate[]): string {
     reason: place.reason ?? "",
   }));
 
+  const interestRules =
+    req.interests.length > 0
+      ? [
+          `User interests (prioritize these in themes, ordering, and notes): ${req.interests.join(", ")}.`,
+          "Each notes field must briefly explain how that stop relates to at least one interest or to the day theme.",
+        ]
+      : [
+          "No specific interests were provided: diversify themes across days (culture, nature, food, neighborhoods, classics).",
+          "Each notes field must briefly say why this stop fits that day or travel pace.",
+        ];
+
   return [
-    "You are an itinerary planner API.",
-    "Return only valid JSON with no markdown and no extra text.",
-    "Create exactly 3 plans with styles explorer, comfort, foodie.",
-    "Each day must have exactly 4 items: morning, lunch, afternoon, dinner.",
-    "Estimated costs should roughly respect the total budget.",
-    "Use only places from the provided candidate list.",
+    "You are an expert travel itinerary planner. Return only valid JSON — no markdown fences, no commentary.",
+    "",
+    "Hard rules:",
+    "- Output exactly 3 plans: styles explorer, comfort, foodie (one plan per style).",
+    "- Each plan covers all requested days; each day has exactly 4 items with slots: morning, lunch, afternoon, dinner.",
+    "- Use ONLY venues from Candidate places. Every placeId MUST match an id from that list exactly. Copy placeName from the list for consistency.",
+    "- Within EACH plan, never use the same placeId twice (no duplicate venues across the whole trip for that plan).",
+    "- Across the 3 plans, vary venue choices where possible so the three itineraries feel distinct, not copy-paste.",
+    "- Align estimated costs with the trip budget and pace (lower density / fewer costly meals for relaxed pace).",
+    "- Morning and afternoon slots = attraction category; lunch and dinner = restaurant category.",
+    ...interestRules,
+    "",
+    "Style differentiation:",
+    "- explorer: more sights and walking between distinct areas; energetic day themes.",
+    "- comfort: fewer drastic moves, more breathing room; relaxed themes and practical notes.",
+    "- foodie: emphasize memorable meals; lunch and dinner should feel special or highly local.",
     "",
     `Trip request: ${JSON.stringify(req)}`,
     `Candidate places: ${JSON.stringify(simplifiedPlaces)}`,
@@ -175,7 +254,7 @@ async function generateWithGemini(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         generationConfig: {
-          temperature: 0.4,
+          temperature: 0.72,
           responseMimeType: "application/json",
         },
         contents: [
@@ -202,18 +281,21 @@ async function generateWithGemini(
   const parsed = JSON.parse(raw) as unknown;
   const validated = geminiPlansSchema.parse(parsed);
 
-  return validated.plans.map((plan) => ({
-    ...plan,
-    totalEstimatedBudget: Math.round(plan.totalEstimatedBudget),
-    days: plan.days.map((day) => ({
-      ...day,
-      dailyBudget: Math.round(day.dailyBudget),
-      items: day.items.map((item) => ({
-        ...item,
-        estimatedCost: Math.round(item.estimatedCost),
+  return validated.plans.map((plan) => {
+    const rounded: ItineraryPlan = {
+      ...plan,
+      totalEstimatedBudget: Math.round(plan.totalEstimatedBudget),
+      days: plan.days.map((day) => ({
+        ...day,
+        dailyBudget: Math.round(day.dailyBudget),
+        items: day.items.map((item) => ({
+          ...item,
+          estimatedCost: Math.round(item.estimatedCost),
+        })),
       })),
-    })),
-  }));
+    };
+    return sanitizePlanPlaces(rounded, places);
+  });
 }
 
 export async function generateMultiStylePlans(

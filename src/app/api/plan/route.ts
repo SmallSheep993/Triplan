@@ -8,7 +8,7 @@ const tripRequestSchema = z.object({
   destination: z.string().min(1),
   days: z.number().int().min(1).max(14),
   budget: z.number().min(100),
-  interests: z.array(z.string()).min(1),
+  interests: z.array(z.string()).default([]),
   pace: z.enum(["relaxed", "balanced", "packed"]),
 });
 

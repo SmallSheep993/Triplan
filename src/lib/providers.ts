@@ -110,16 +110,26 @@ export async function fetchPlaceCandidates(
   if (!apiKey) return buildFallbackCandidates(req);
 
   try {
-    const interestsText = req.interests.join(", ");
+    const interestTail =
+      req.interests.length > 0 ? ` ${req.interests.join(", ")}` : "";
+    const attractionQuery =
+      req.interests.length > 0
+        ? `${req.destination} best attractions${interestTail}`
+        : `${req.destination} popular tourist attractions landmarks museums scenic spots`;
+    const restaurantQuery =
+      req.interests.length > 0
+        ? `${req.destination} best restaurants${interestTail}`
+        : `${req.destination} highly rated restaurants local dining dinner spots`;
+
     const [attractionResults, restaurantResults] = await Promise.all([
       searchGooglePlaces({
         apiKey,
-        textQuery: `${req.destination} best attractions ${interestsText}`,
+        textQuery: attractionQuery,
         includedType: "tourist_attraction",
       }),
       searchGooglePlaces({
         apiKey,
-        textQuery: `${req.destination} best restaurants ${interestsText}`,
+        textQuery: restaurantQuery,
         includedType: "restaurant",
       }),
     ]);

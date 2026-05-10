@@ -123,10 +123,6 @@ export default function HomePage() {
     }
 
     const interests = parseInterestsInput(interestsInput);
-    if (interests.length < 1) {
-      setError("Add at least one interest (comma-separated).");
-      return;
-    }
 
     const payload: TripRequest = {
       ...request,
@@ -256,14 +252,14 @@ export default function HomePage() {
             </label>
 
             <label className="field">
-              <span>Interests</span>
+              <span>Interests (optional)</span>
               <input
                 placeholder="e.g. food, museums, city walk, nature"
                 value={interestsInput}
                 onChange={(e) => setInterestsInput(e.target.value)}
               />
               <small className="field-help">
-                Use comma-separated interests to personalize recommendations.
+                Comma-separated. Leave blank for a balanced mix of popular spots at your destination.
               </small>
             </label>
 
@@ -297,7 +293,7 @@ export default function HomePage() {
               <ol>
                 <li>Search destination and select one suggestion.</li>
                 <li>Set your trip length and total budget.</li>
-                <li>Add interests to personalize your plan.</li>
+                <li>Optional: add interests to sharpen recommendations.</li>
                 <li>Generate and compare three itinerary styles.</li>
               </ol>
             </div>
