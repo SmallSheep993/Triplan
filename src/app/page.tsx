@@ -17,6 +17,15 @@ const DEFAULT_REQUEST: TripRequest = {
   pace: "balanced",
 };
 
+/** Parses comma-separated interests; accepts English and Chinese commas while typing stays raw in UI. */
+function parseInterestsInput(raw: string): string[] {
+  return raw
+    .replace(/，/g, ",")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
 interface PlanApiResponse {
   plans: ItineraryPlan[];
 }
@@ -38,6 +47,7 @@ export default function HomePage() {
   const [request, setRequest] = useState<TripRequest>(DEFAULT_REQUEST);
   const [daysInput, setDaysInput] = useState("");
   const [budgetInput, setBudgetInput] = useState("");
+  const [interestsInput, setInterestsInput] = useState("");
   const [plans, setPlans] = useState<ItineraryPlan[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -112,10 +122,17 @@ export default function HomePage() {
       return;
     }
 
+    const interests = parseInterestsInput(interestsInput);
+    if (interests.length < 1) {
+      setError("Add at least one interest (comma-separated).");
+      return;
+    }
+
     const payload: TripRequest = {
       ...request,
       days: parsedDays,
       budget: parsedBudget,
+      interests,
     };
 
     setLoading(true);
@@ -242,16 +259,8 @@ export default function HomePage() {
               <span>Interests</span>
               <input
                 placeholder="e.g. food, museums, city walk, nature"
-                value={request.interests.join(", ")}
-                onChange={(e) =>
-                  setRequest({
-                    ...request,
-                    interests: e.target.value
-                      .split(",")
-                      .map((v) => v.trim())
-                      .filter(Boolean),
-                  })
-                }
+                value={interestsInput}
+                onChange={(e) => setInterestsInput(e.target.value)}
               />
               <small className="field-help">
                 Use comma-separated interests to personalize recommendations.
