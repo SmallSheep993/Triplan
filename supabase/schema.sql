@@ -30,7 +30,9 @@ create table if not exists itinerary_days (
 create table if not exists itinerary_items (
   id uuid primary key default gen_random_uuid(),
   itinerary_day_id uuid not null references itinerary_days(id) on delete cascade,
-  slot text not null check (slot in ('morning', 'lunch', 'afternoon', 'dinner')),
+  start_time text not null,
+  end_time text not null,
+  place_kind text not null check (place_kind in ('attraction', 'restaurant')),
   place_id text not null,
   place_name text not null,
   estimated_cost numeric not null,

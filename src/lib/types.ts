@@ -24,8 +24,11 @@ export interface PlaceCandidate {
   reason?: string;
 }
 
-export interface ItineraryItem {
-  slot: "morning" | "lunch" | "afternoon" | "dinner";
+/** Local time window (24h, destination). placeKind must match candidate category. */
+export interface ItineraryBlock {
+  start: string;
+  end: string;
+  placeKind: "attraction" | "restaurant";
   placeId: string;
   placeName: string;
   estimatedCost: number;
@@ -35,7 +38,7 @@ export interface ItineraryItem {
 export interface ItineraryDay {
   day: number;
   theme: string;
-  items: ItineraryItem[];
+  blocks: ItineraryBlock[];
   dailyBudget: number;
 }
 

@@ -1,4 +1,5 @@
 import type { PlaceCandidate, TripRequest } from "@/lib/types";
+import { isNightOrientedInterests } from "@/lib/travelPrefs";
 
 interface GooglePlace {
   id?: string;
@@ -25,6 +26,7 @@ const FALLBACK_RESTAURANTS = [
 ];
 
 function buildFallbackCandidates(req: TripRequest): PlaceCandidate[] {
+  const night = isNightOrientedInterests(req.interests);
   const attractions = FALLBACK_ATTRACTIONS.map((name, i) => ({
     id: `a-${i + 1}`,
     name: `${req.destination} ${name}`,
@@ -43,13 +45,34 @@ function buildFallbackCandidates(req: TripRequest): PlaceCandidate[] {
     reason: "Highly rated and easy to reach",
   }));
 
-  return [...attractions, ...restaurants];
+  const nightExtras: PlaceCandidate[] = night
+    ? [
+        {
+          id: "n-fallback-1",
+          name: `${req.destination} Late-night Bistro & Bar Row`,
+          category: "restaurant",
+          rating: 4.35,
+          priceLevel: 2,
+          reason: "Fallback pick for night-owl / late dining interest",
+        },
+        {
+          id: "n-fallback-2",
+          name: `${req.destination} Rooftop Lounge (evening views)`,
+          category: "restaurant",
+          rating: 4.4,
+          priceLevel: 3,
+          reason: "Fallback pick for late evening / nightlife-style interest",
+        },
+      ]
+    : [];
+
+  return [...attractions, ...restaurants, ...nightExtras];
 }
 
 async function searchGooglePlaces(params: {
   apiKey: string;
   textQuery: string;
-  includedType: "restaurant" | "tourist_attraction";
+  includedType: "restaurant" | "tourist_attraction" | "bar" | "night_club";
 }): Promise<GooglePlace[]> {
   const response = await fetch(GOOGLE_PLACES_TEXT_SEARCH_URL, {
     method: "POST",
@@ -76,9 +99,22 @@ async function searchGooglePlaces(params: {
   return data.places ?? [];
 }
 
+async function searchGooglePlacesSafe(params: {
+  apiKey: string;
+  textQuery: string;
+  includedType: "restaurant" | "tourist_attraction" | "bar" | "night_club";
+}): Promise<GooglePlace[]> {
+  try {
+    return await searchGooglePlaces(params);
+  } catch {
+    return [];
+  }
+}
+
 function toCandidate(
   place: GooglePlace,
   category: PlaceCandidate["category"],
+  reasonOverride?: string,
 ): PlaceCandidate | null {
   if (!place.id || !place.displayName?.text) return null;
 
@@ -89,9 +125,10 @@ function toCandidate(
     rating: place.rating ?? 4.0,
     priceLevel: place.priceLevel,
     reason:
-      category === "restaurant"
+      reasonOverride ??
+      (category === "restaurant"
         ? "Selected from Google Places dining results"
-        : "Selected from Google Places attraction results",
+        : "Selected from Google Places attraction results"),
   };
 }
 
@@ -110,6 +147,7 @@ export async function fetchPlaceCandidates(
   if (!apiKey) return buildFallbackCandidates(req);
 
   try {
+    const nightOriented = isNightOrientedInterests(req.interests);
     const interestTail =
       req.interests.length > 0 ? ` ${req.interests.join(", ")}` : "";
     const attractionQuery =
@@ -118,10 +156,10 @@ export async function fetchPlaceCandidates(
         : `${req.destination} popular tourist attractions landmarks museums scenic spots`;
     const restaurantQuery =
       req.interests.length > 0
-        ? `${req.destination} best restaurants${interestTail}`
-        : `${req.destination} highly rated restaurants local dining dinner spots`;
+        ? `${req.destination} best restaurants${interestTail}${nightOriented ? " late night dinner cocktails" : ""}`
+        : `${req.destination} highly rated restaurants local dining dinner spots${nightOriented ? " open late evening" : ""}`;
 
-    const [attractionResults, restaurantResults] = await Promise.all([
+    const [attractionResults, restaurantResults, barResultsRaw] = await Promise.all([
       searchGooglePlaces({
         apiKey,
         textQuery: attractionQuery,
@@ -132,7 +170,23 @@ export async function fetchPlaceCandidates(
         textQuery: restaurantQuery,
         includedType: "restaurant",
       }),
+      nightOriented
+        ? searchGooglePlacesSafe({
+            apiKey,
+            textQuery: `${req.destination} bars cocktail lounge nightlife open late${interestTail}`,
+            includedType: "bar",
+          })
+        : Promise.resolve([] as GooglePlace[]),
     ]);
+
+    let barResults = barResultsRaw;
+    if (nightOriented && barResults.length === 0) {
+      barResults = await searchGooglePlacesSafe({
+        apiKey,
+        textQuery: `${req.destination} night club karaoke late night venues`,
+        includedType: "night_club",
+      });
+    }
 
     const mapped = dedupeCandidates([
       ...attractionResults
@@ -141,6 +195,19 @@ export async function fetchPlaceCandidates(
       ...restaurantResults
         .map((place) => toCandidate(place, "restaurant"))
         .filter((value): value is PlaceCandidate => value !== null),
+      ...(nightOriented
+        ? [
+            ...barResults
+              .map((place) =>
+                toCandidate(
+                  place,
+                  "restaurant",
+                  "Late-night / bar & nightlife search (Places)",
+                ),
+              )
+              .filter((value): value is PlaceCandidate => value !== null),
+          ]
+        : []),
     ]);
 
     if (mapped.length < 4) return buildFallbackCandidates(req);

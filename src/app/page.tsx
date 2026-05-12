@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type {
   DestinationSuggestion,
-  ItineraryItem,
   ItineraryPlan,
   PlanStyle,
   TripRequest,
@@ -35,13 +34,6 @@ const STYLE_TABS: { key: PlanStyle; label: string; description: string }[] = [
   { key: "comfort", label: "Comfort", description: "Relaxed pace with extra breaks." },
   { key: "foodie", label: "Foodie", description: "Top dining spots with local flavor." },
 ];
-
-const SLOT_LABEL: Record<ItineraryItem["slot"], string> = {
-  morning: "Morning",
-  lunch: "Lunch",
-  afternoon: "Afternoon",
-  dinner: "Dinner",
-};
 
 export default function HomePage() {
   const [request, setRequest] = useState<TripRequest>(DEFAULT_REQUEST);
@@ -382,14 +374,16 @@ export default function HomePage() {
                     <h4>{day.theme}</h4>
                     <p className="day-budget">Daily budget: ${day.dailyBudget}</p>
                     <ul>
-                      {day.items.map((item) => (
-                        <li key={`${day.day}-${item.slot}`}>
+                      {day.blocks.map((block, idx) => (
+                        <li key={`${day.day}-${idx}-${block.start}`}>
                           <div className="slot-title">
-                            <span>{SLOT_LABEL[item.slot]}</span>
-                            <strong>${item.estimatedCost}</strong>
+                            <span>
+                              {block.start} – {block.end}
+                            </span>
+                            <strong>${block.estimatedCost}</strong>
                           </div>
-                          <p>{item.placeName}</p>
-                          <small>{item.notes}</small>
+                          <p>{block.placeName}</p>
+                          <small>{block.notes}</small>
                         </li>
                       ))}
                     </ul>

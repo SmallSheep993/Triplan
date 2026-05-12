@@ -19,7 +19,7 @@ Triplan is an AI travel planner that generates personalized itineraries in multi
 - Empty-first form input (users manually enter values)
 - Editable numeric fields for days and budget (can be fully cleared and retyped)
 - Three itinerary styles per request: `explorer`, `comfort`, `foodie`
-- Daily plans split into `morning`, `lunch`, `afternoon`, `dinner`
+- Daily plans use flexible time blocks (`start`–`end`) with 3–10 segments per day; **evening coverage** targets last end ≥ **19:30** by default, or **22:00+** with a **21:00+** block when interests indicate night-owl / nightlife (see `travelPrefs.ts`).
 - Responsive UI with quick-start guidance and example input panel
 - Rule-based fallback if Gemini generation fails
 
