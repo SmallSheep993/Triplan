@@ -195,6 +195,13 @@ body {
   line-height: 1.45;
 }
 
+.persist-hint {
+  margin: -8px 0 16px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 input,
 select {
   width: 100%;

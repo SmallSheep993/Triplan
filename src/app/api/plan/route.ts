@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generateMultiStylePlans } from "@/lib/planner";
+import { persistGeneratedPlans } from "@/lib/persistTrip";
 import { fetchPlaceCandidates } from "@/lib/providers";
 import type { TripRequest } from "@/lib/types";
 
@@ -28,12 +29,15 @@ export async function POST(request: Request) {
     const placeCandidates = await fetchPlaceCandidates(tripRequest);
     const plans = await generateMultiStylePlans(tripRequest, placeCandidates);
 
+    const persisted = await persistGeneratedPlans(tripRequest, plans);
+
     return NextResponse.json({
       tripRequest,
       generatedAt: new Date().toISOString(),
       plans,
-      nextStep:
-        "Enhance Gemini prompts and persist itineraries to Supabase.",
+      persisted: persisted.ok,
+      tripId: persisted.ok ? persisted.tripId : undefined,
+      persistDetails: persisted.ok ? undefined : persisted.reason,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

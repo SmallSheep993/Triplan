@@ -27,6 +27,9 @@ function parseInterestsInput(raw: string): string[] {
 
 interface PlanApiResponse {
   plans: ItineraryPlan[];
+  persisted?: boolean;
+  tripId?: string;
+  persistDetails?: string;
 }
 
 const STYLE_TABS: { key: PlanStyle; label: string; description: string }[] = [
@@ -51,6 +54,7 @@ export default function HomePage() {
   const [selectedDestination, setSelectedDestination] =
     useState<DestinationSuggestion | null>(null);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [persistHint, setPersistHint] = useState<string>("");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -125,6 +129,7 @@ export default function HomePage() {
 
     setLoading(true);
     setError("");
+    setPersistHint("");
 
     try {
       const response = await fetch("/api/plan", {
@@ -137,6 +142,13 @@ export default function HomePage() {
       if (!response.ok) throw new Error(data.message ?? "Request failed");
       setPlans(data.plans);
       setActiveStyle(data.plans[0]?.style ?? "explorer");
+      if (data.persisted && data.tripId) {
+        setPersistHint(`Trip saved to database (id: ${data.tripId}).`);
+      } else if (data.persistDetails) {
+        setPersistHint(
+          `Itineraries generated, but not saved: ${data.persistDetails}`,
+        );
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -319,6 +331,8 @@ export default function HomePage() {
           <h2>Generated Plans</h2>
           <p>Compare styles and choose the one that matches your travel mood.</p>
         </div>
+
+        {persistHint ? <p className="persist-hint">{persistHint}</p> : null}
 
         {plans.length === 0 && !loading ? (
           <div className="card empty-state">

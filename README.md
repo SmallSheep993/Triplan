@@ -11,7 +11,7 @@ Triplan is an AI travel planner that generates personalized itineraries in multi
 - Google Places API (destination suggestions + place candidates)
 - Gemini API (structured itinerary generation)
 - Zod (runtime schema validation)
-- Supabase (schema prepared for persistence)
+- Supabase (itineraries persisted after `/api/plan` when env keys are set)
 
 ## Current Features
 
@@ -30,6 +30,7 @@ Triplan is an AI travel planner that generates personalized itineraries in multi
 3. Backend sends trip request + candidates to Gemini for JSON itinerary generation.
 4. Backend validates the model output with Zod and returns plans to the UI.
 5. If Gemini fails, the backend falls back to rule-based generation.
+6. Backend writes the trip and all three itinerary styles to Supabase (service role). If persistence fails or env is missing, the API still returns `plans`; see response fields `persisted` / `persistDetails`.
 
 ## API Endpoints
 
@@ -37,12 +38,15 @@ Triplan is an AI travel planner that generates personalized itineraries in multi
   - Returns destination suggestions from Google Places.
 - `POST /api/plan`
   - Generates three itinerary styles from user preferences.
+  - Response includes `persisted` (boolean), optional `tripId`, and optional `persistDetails` when saving failed or was skipped.
 
 ## Project Structure
 
 - `src/app/page.tsx` - main planner UI
 - `src/app/api/destination-suggestions/route.ts` - destination suggestion API
 - `src/app/api/plan/route.ts` - itinerary generation API
+- `src/lib/supabase/admin.ts` - server Supabase client (service role)
+- `src/lib/persistTrip.ts` - insert trip + itinerary rows
 - `src/lib/providers.ts` - Google Places provider logic
 - `src/lib/planner.ts` - Gemini planner + fallback logic
 - `src/lib/types.ts` - shared types
@@ -83,7 +87,7 @@ curl -X POST http://localhost:3000/api/plan \
 
 ## Next Improvements
 
-- Persist generated trips to Supabase
+- Add list/history page for saved trips from Supabase (`tripId`)
 - Add regenerate-one-day and replace-place interactions
 - Add budget balancing and place diversity constraints
 - Improve Gemini prompt and retry strategy for rate-limit handling
